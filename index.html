@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adaptive Resource Allocator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2942 50%, #0d1f35 100%);
+            min-height: 100vh;
+            color: #ffffff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .header-title span:first-of-type {
+            color: #22c55e;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-pause {
+            background: #22c55e;
+            color: #0a1628;
+        }
+
+        .btn-pause:hover {
+            background: #16a34a;
+        }
+
+        .btn-pause.paused {
+            background: #f59e0b;
+        }
+
+        .btn-export {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+        }
+
+        .btn-export:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .settings-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.6);
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Warning Alerts */
+        .alerts-container {
+            margin-bottom: 20px;
+        }
+
+        .alert {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .alert-warning {
+            background: rgba(234, 179, 8, 0.15);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        .alert-icon {
+            font-size: 24px;
+        }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .alert-danger .alert-title {
+            color: #ef4444;
+        }
+
+        .alert-warning .alert-title {
+            color: #eab308;
+        }
+
+        .alert-message {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .alert-close {
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .alert-close:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            position: relative;
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .stat-icon.cpu {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+
+        .stat-icon.memory {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .stat-icon.cores {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .stat-icon.uptime {
+            background: rgba(168, 85, 247, 0.2);
+            color: #a855f7;
+        }
+
+        .stat-icon.battery {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .stat-icon.battery.low {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .stat-icon.battery.warning {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+
+        .stat-icon.temp {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .stat-icon.temp.warning {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+
+        .stat-icon.temp.danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .stat-badge.danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .stat-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .stat-badge.warning {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+
+        .stat-badge.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .stat-value span {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .stat-subtext {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-fill.cpu {
+            background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+        }
+
+        .progress-fill.memory {
+            background: #22c55e;
+        }
+
+        /* Chart Section */
+        .chart-section {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 30px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.cpu {
+            background: #22c55e;
+        }
+
+        .legend-dot.memory {
+            background: #3b82f6;
+        }
+
+        .chart-container {
+            height: 300px;
+            position: relative;
+        }
+
+        /* Process Table */
+        .process-section {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 30px;
+        }
+
+        .process-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .process-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .process-count {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .process-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .process-table th {
+            text-align: left;
+            padding: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 500;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .process-table td {
+            padding: 12px;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .process-table tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .priority-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .priority-high {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .priority-normal {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .priority-low {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        /* Activity Log */
+        .log-section {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .log-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 13px;
+        }
+
+        .log-time {
+            color: rgba(255, 255, 255, 0.4);
+            min-width: 80px;
+        }
+
+        .log-type {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .log-type.info {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .log-type.warning {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+
+        .log-type.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .log-message {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .stats-grid, .stats-grid-2 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid, .stats-grid-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 16px;
+            }
+            
+            .header-actions {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .alert {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-title">
+                <div class="status-dot"></div>
+                <span>Adaptive</span> Resource Allocator
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-pause" id="pauseBtn" onclick="togglePause()">
+                    <span id="pauseIcon">⏸</span>
+                    <span id="pauseText">Pause</span>
+                </button>
+                <button class="btn btn-export" onclick="exportCSV()">
+                    <span>↓</span> Export CSV
+                </button>
+                <button class="settings-btn">⚙</button>
+            </div>
+        </header>
+
+        <!-- Warning Alerts -->
+        <div class="alerts-container" id="alertsContainer">
+        </div>
+
+        <!-- Stats Cards Row 1 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon cpu">⬡</div>
+                    <div class="stat-badge warning" id="cpuBadge">65.0%</div>
+                </div>
+                <div class="stat-label">CPU Usage</div>
+                <div class="stat-value"><span id="cpuValue">65</span>%</div>
+                <div class="progress-bar">
+                    <div class="progress-fill cpu" id="cpuProgress" style="width: 65%"></div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon memory">▣</div>
+                    <div class="stat-badge success" id="memoryBadge">35.8%</div>
+                </div>
+                <div class="stat-label">Memory Usage</div>
+                <div class="stat-value"><span id="memoryValue">3.9</span><span>/ 16 GB</span></div>
+                <div class="progress-bar">
+                    <div class="progress-fill memory" id="memoryProgress" style="width: 35.8%"></div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon temp" id="tempIcon">🌡</div>
+                    <div class="stat-badge success" id="tempBadge">Normal</div>
+                </div>
+                <div class="stat-label">CPU Temperature</div>
+                <div class="stat-value"><span id="tempValue">52</span><span>°C</span></div>
+                <div class="progress-bar">
+                    <div class="progress-fill memory" id="tempProgress" style="width: 52%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Cards Row 2 -->
+        <div class="stats-grid-2">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon battery" id="batteryIcon">🔋</div>
+                    <div class="stat-badge success" id="batteryBadge">Good</div>
+                </div>
+                <div class="stat-label">Battery Level</div>
+                <div class="stat-value"><span id="batteryValue">78</span><span>%</span></div>
+                <div class="stat-subtext" id="batteryStatus">Discharging</div>
+                <div class="progress-bar">
+                    <div class="progress-fill memory" id="batteryProgress" style="width: 78%"></div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon cores">◈</div>
+                </div>
+                <div class="stat-label">CPU Cores</div>
+                <div class="stat-value">8 <span>cores</span></div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon uptime">◷</div>
+                </div>
+                <div class="stat-label">System Uptime</div>
+                <div class="stat-value" id="uptime">2d 14h 32m</div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="chart-section">
+            <div class="chart-header">
+                <div class="chart-title">Resource Usage Over Time</div>
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <div class="legend-dot cpu"></div>
+                        CPU
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot memory"></div>
+                        Memory
+                    </div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="resourceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Process Table -->
+        <div class="process-section">
+            <div class="process-header">
+                <div class="process-title">Running Processes</div>
+                <div class="process-count" id="processCount">12 processes</div>
+            </div>
+            <table class="process-table">
+                <thead>
+                    <tr>
+                        <th>PID</th>
+                        <th>Process Name</th>
+                        <th>CPU %</th>
+                        <th>Memory %</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="processTable">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="log-section">
+            <div class="log-title">Activity Log</div>
+            <div class="log-container" id="logContainer">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let isPaused = false;
+        let cpuHistory = [];
+        let memoryHistory = [];
+        let labels = [];
+        let chart;
+        let uptimeSeconds = 225720; // 2d 14h 32m in seconds
+        let dataHistory = [];
+        
+        // Battery and Temperature state
+        let batteryLevel = 78;
+        let cpuTemp = 52;
+        let isCharging = false;
+        let activeAlerts = {};
+
+        // Thresholds
+        const THRESHOLDS = {
+            batteryLow: 20,
+            batteryCritical: 10,
+            tempWarning: 70,
+            tempCritical: 85,
+            memoryWarning: 70,
+            memoryCritical: 85,
+            cpuWarning: 70,
+            cpuCritical: 85
+        };
+
+        // Simulated processes
+        const processes = [
+            { pid: 1234, name: 'chrome.exe', cpu: 12.5, memory: 8.2, priority: 'normal' },
+            { pid: 5678, name: 'vscode.exe', cpu: 8.3, memory: 6.1, priority: 'normal' },
+            { pid: 9012, name: 'node.exe', cpu: 15.2, memory: 4.5, priority: 'high' },
+            { pid: 3456, name: 'python.exe', cpu: 22.1, memory: 3.8, priority: 'high' },
+            { pid: 7890, name: 'explorer.exe', cpu: 2.1, memory: 2.4, priority: 'low' },
+            { pid: 2345, name: 'spotify.exe', cpu: 3.5, memory: 5.2, priority: 'low' },
+            { pid: 6789, name: 'slack.exe', cpu: 4.2, memory: 4.8, priority: 'normal' },
+            { pid: 1357, name: 'discord.exe', cpu: 2.8, memory: 3.2, priority: 'low' },
+            { pid: 2468, name: 'docker.exe', cpu: 6.5, memory: 8.9, priority: 'high' },
+            { pid: 3579, name: 'mysql.exe', cpu: 4.1, memory: 5.6, priority: 'normal' },
+            { pid: 4680, name: 'nginx.exe', cpu: 1.2, memory: 1.8, priority: 'normal' },
+            { pid: 5791, name: 'redis.exe', cpu: 0.8, memory: 2.1, priority: 'low' },
+        ];
+
+        // Show alert
+        function showAlert(id, type, title, message) {
+            if (activeAlerts[id]) return; // Already showing
+            
+            const container = document.getElementById('alertsContainer');
+            const alertDiv = document.createElement('div');
+            alertDiv.id = `alert-${id}`;
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.innerHTML = `
+                <span class="alert-icon">${type === 'danger' ? '⚠️' : '⚡'}</span>
+                <div class="alert-content">
+                    <div class="alert-title">${title}</div>
+                    <div class="alert-message">${message}</div>
+                </div>
+                <button class="alert-close" onclick="dismissAlert('${id}')">&times;</button>
+            `;
+            container.appendChild(alertDiv);
+            activeAlerts[id] = true;
+        }
+
+        // Dismiss alert
+        function dismissAlert(id) {
+            const alert = document.getElementById(`alert-${id}`);
+            if (alert) {
+                alert.remove();
+                delete activeAlerts[id];
+            }
+        }
+
+        // Remove alert if condition improves
+        function removeAlertIfExists(id) {
+            dismissAlert(id);
+        }
+
+        // Update battery
+        function updateBattery() {
+            if (isPaused) return;
+
+            // Simulate battery drain/charge
+            if (isCharging) {
+                batteryLevel = Math.min(100, batteryLevel + 0.3);
+                if (batteryLevel >= 100) isCharging = false;
+            } else {
+                batteryLevel = Math.max(5, batteryLevel - 0.1);
+                if (batteryLevel <= 5) isCharging = true; // Auto-start charging at 5%
+            }
+
+            const batteryIcon = document.getElementById('batteryIcon');
+            const batteryBadge = document.getElementById('batteryBadge');
+            const batteryValue = document.getElementById('batteryValue');
+            const batteryStatus = document.getElementById('batteryStatus');
+            const batteryProgress = document.getElementById('batteryProgress');
+
+            batteryValue.textContent = Math.round(batteryLevel);
+            batteryProgress.style.width = batteryLevel + '%';
+            batteryStatus.textContent = isCharging ? 'Charging ⚡' : 'Discharging';
+
+            // Battery warnings
+            if (batteryLevel <= THRESHOLDS.batteryCritical) {
+                batteryIcon.className = 'stat-icon battery low';
+                batteryBadge.className = 'stat-badge danger';
+                batteryBadge.textContent = 'Critical!';
+                batteryProgress.style.background = '#ef4444';
+                showAlert('battery-critical', 'danger', '⚠️ CRITICAL: Battery Very Low!', 
+                    `Battery at ${Math.round(batteryLevel)}%. Connect charger immediately to prevent data loss.`);
+                removeAlertIfExists('battery-low');
+            } else if (batteryLevel <= THRESHOLDS.batteryLow) {
+                batteryIcon.className = 'stat-icon battery warning';
+                batteryBadge.className = 'stat-badge warning';
+                batteryBadge.textContent = 'Low';
+                batteryProgress.style.background = '#eab308';
+                showAlert('battery-low', 'warning', '🔋 Low Battery Warning', 
+                    `Battery at ${Math.round(batteryLevel)}%. Consider connecting to power source.`);
+                removeAlertIfExists('battery-critical');
+            } else {
+                batteryIcon.className = 'stat-icon battery';
+                batteryBadge.className = 'stat-badge success';
+                batteryBadge.textContent = 'Good';
+                batteryProgress.style.background = '#22c55e';
+                removeAlertIfExists('battery-low');
+                removeAlertIfExists('battery-critical');
+            }
+        }
+
+        // Update temperature
+        function updateTemperature() {
+            if (isPaused) return;
+
+            // Temperature fluctuates based on CPU usage
+            const cpuUsage = cpuHistory.length > 0 ? cpuHistory[cpuHistory.length - 1] : 50;
+            const targetTemp = 40 + (cpuUsage * 0.5); // Temp correlates with CPU
+            cpuTemp = cpuTemp + (targetTemp - cpuTemp) * 0.1 + (Math.random() - 0.5) * 3;
+            cpuTemp = Math.max(35, Math.min(95, cpuTemp));
+
+            const tempIcon = document.getElementById('tempIcon');
+            const tempBadge = document.getElementById('tempBadge');
+            const tempValue = document.getElementById('tempValue');
+            const tempProgress = document.getElementById('tempProgress');
+
+            tempValue.textContent = Math.round(cpuTemp);
+            tempProgress.style.width = cpuTemp + '%';
+
+            // Temperature warnings
+            if (cpuTemp >= THRESHOLDS.tempCritical) {
+                tempIcon.className = 'stat-icon temp danger';
+                tempBadge.className = 'stat-badge danger';
+                tempBadge.textContent = 'OVERHEAT!';
+                tempProgress.style.background = '#ef4444';
+                showAlert('temp-critical', 'danger', '🔥 CRITICAL: CPU Overheating!', 
+                    `Temperature at ${Math.round(cpuTemp)}°C. System may throttle or shutdown. Check cooling immediately!`);
+                removeAlertIfExists('temp-warning');
+                addLog('warning', `CRITICAL: CPU temperature at ${Math.round(cpuTemp)}°C - Overheating!`);
+            } else if (cpuTemp >= THRESHOLDS.tempWarning) {
+                tempIcon.className = 'stat-icon temp warning';
+                tempBadge.className = 'stat-badge warning';
+                tempBadge.textContent = 'Hot';
+                tempProgress.style.background = '#eab308';
+                showAlert('temp-warning', 'warning', '🌡️ High Temperature Warning', 
+                    `CPU temperature at ${Math.round(cpuTemp)}°C. Consider reducing workload or improving ventilation.`);
+                removeAlertIfExists('temp-critical');
+            } else {
+                tempIcon.className = 'stat-icon temp';
+                tempBadge.className = 'stat-badge success';
+                tempBadge.textContent = 'Normal';
+                tempProgress.style.background = '#22c55e';
+                removeAlertIfExists('temp-warning');
+                removeAlertIfExists('temp-critical');
+            }
+        }
+
+        // Initialize chart
+        function initChart() {
+            const ctx = document.getElementById('resourceChart').getContext('2d');
+            
+            // Generate initial data
+            for (let i = 0; i < 30; i++) {
+                labels.push('');
+                cpuHistory.push(30 + Math.random() * 40);
+                memoryHistory.push(25 + Math.random() * 30);
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'CPU',
+                            data: cpuHistory,
+                            borderColor: '#22c55e',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointRadius: 0,
+                        },
+                        {
+                            label: 'Memory',
+                            data: memoryHistory,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointRadius: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index',
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(10, 22, 40, 0.9)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: false,
+                        },
+                        y: {
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.5)',
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update stats
+        function updateStats() {
+            if (isPaused) return;
+
+            // Simulate CPU and Memory changes
+            const newCpu = Math.max(20, Math.min(95, cpuHistory[cpuHistory.length - 1] + (Math.random() - 0.5) * 15));
+            const newMemory = Math.max(20, Math.min(90, memoryHistory[memoryHistory.length - 1] + (Math.random() - 0.5) * 8));
+
+            // Update history
+            cpuHistory.push(newCpu);
+            memoryHistory.push(newMemory);
+            labels.push('');
+
+            if (cpuHistory.length > 30) {
+                cpuHistory.shift();
+                memoryHistory.shift();
+                labels.shift();
+            }
+
+            // Store for export
+            dataHistory.push({
+                timestamp: new Date().toISOString(),
+                cpu: newCpu.toFixed(1),
+                memory: newMemory.toFixed(1),
+                battery: Math.round(batteryLevel),
+                temperature: Math.round(cpuTemp)
+            });
+
+            // Keep only last 100 entries for export
+            if (dataHistory.length > 100) dataHistory.shift();
+
+            // Update chart
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = cpuHistory;
+            chart.data.datasets[1].data = memoryHistory;
+            chart.update('none');
+
+            // Update UI
+            const cpuValue = newCpu.toFixed(0);
+            const memoryGB = (newMemory / 100 * 16).toFixed(1);
+            const memoryPercent = newMemory.toFixed(1);
+
+            document.getElementById('cpuValue').textContent = cpuValue;
+            document.getElementById('cpuBadge').textContent = newCpu.toFixed(1) + '%';
+            document.getElementById('cpuProgress').style.width = cpuValue + '%';
+            
+            document.getElementById('memoryValue').textContent = memoryGB;
+            document.getElementById('memoryBadge').textContent = memoryPercent + '%';
+            document.getElementById('memoryProgress').style.width = memoryPercent + '%';
+
+            // Update badge colors and warnings
+            const cpuBadge = document.getElementById('cpuBadge');
+            const memoryBadge = document.getElementById('memoryBadge');
+            const memoryProgress = document.getElementById('memoryProgress');
+
+            // CPU warnings
+            if (newCpu >= THRESHOLDS.cpuCritical) {
+                cpuBadge.className = 'stat-badge danger';
+                showAlert('cpu-critical', 'danger', '⚡ CRITICAL: CPU Overload!', 
+                    `CPU usage at ${newCpu.toFixed(1)}%. System performance severely impacted.`);
+                removeAlertIfExists('cpu-warning');
+            } else if (newCpu > THRESHOLDS.cpuWarning) {
+                cpuBadge.className = 'stat-badge warning';
+                removeAlertIfExists('cpu-critical');
+            } else {
+                cpuBadge.className = 'stat-badge success';
+                removeAlertIfExists('cpu-warning');
+                removeAlertIfExists('cpu-critical');
+            }
+
+            // Memory warnings
+            if (newMemory >= THRESHOLDS.memoryCritical) {
+                memoryBadge.className = 'stat-badge danger';
+                memoryProgress.style.background = '#ef4444';
+                showAlert('memory-critical', 'danger', '💾 CRITICAL: Memory Full!', 
+                    `Memory at ${memoryPercent}%. Applications may crash. Close unused programs immediately.`);
+                removeAlertIfExists('memory-warning');
+                addLog('warning', `CRITICAL: Memory usage at ${memoryPercent}% - System may become unstable!`);
+            } else if (newMemory >= THRESHOLDS.memoryWarning) {
+                memoryBadge.className = 'stat-badge warning';
+                memoryProgress.style.background = '#eab308';
+                showAlert('memory-warning', 'warning', '💾 High Memory Usage', 
+                    `Memory at ${memoryPercent}%. Consider closing some applications.`);
+                removeAlertIfExists('memory-critical');
+            } else {
+                memoryBadge.className = 'stat-badge success';
+                memoryProgress.style.background = '#22c55e';
+                removeAlertIfExists('memory-warning');
+                removeAlertIfExists('memory-critical');
+            }
+
+            // Decision engine logic - add log entries
+            if (newCpu > 75) {
+                addLog('warning', `High CPU usage detected (${newCpu.toFixed(1)}%) - Adjusting priorities`);
+            }
+            if (newMemory > 60) {
+                addLog('warning', `Memory threshold exceeded (${memoryPercent}%) - Optimizing allocation`);
+            }
+        }
+
+        // Update process table
+        function updateProcesses() {
+            if (isPaused) return;
+
+            const tbody = document.getElementById('processTable');
+            tbody.innerHTML = '';
+
+            processes.forEach(proc => {
+                // Simulate slight changes
+                proc.cpu = Math.max(0.1, Math.min(30, proc.cpu + (Math.random() - 0.5) * 2));
+                proc.memory = Math.max(0.5, Math.min(15, proc.memory + (Math.random() - 0.5) * 0.5));
+
+                // Adjust priority based on usage (Decision Engine)
+                if (proc.cpu > 15) {
+                    proc.priority = 'high';
+                } else if (proc.cpu < 3) {
+                    proc.priority = 'low';
+                }
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${proc.pid}</td>
+                    <td>${proc.name}</td>
+                    <td>${proc.cpu.toFixed(1)}%</td>
+                    <td>${proc.memory.toFixed(1)}%</td>
+                    <td><span class="priority-badge priority-${proc.priority}">${proc.priority}</span></td>
+                    <td>Running</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Update uptime
+        function updateUptime() {
+            if (isPaused) return;
+            
+            uptimeSeconds++;
+            const days = Math.floor(uptimeSeconds / 86400);
+            const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+            const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+            
+            document.getElementById('uptime').textContent = `${days}d ${hours}h ${minutes}m`;
+        }
+
+        // Add log entry
+        function addLog(type, message) {
+            const container = document.getElementById('logContainer');
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-type ${type}">${type.toUpperCase()}</span>
+                <span class="log-message">${message}</span>
+            `;
+            
+            container.insertBefore(entry, container.firstChild);
+            
+            // Keep only last 20 entries
+            while (container.children.length > 20) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Toggle pause
+        function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('pauseBtn');
+            const icon = document.getElementById('pauseIcon');
+            const text = document.getElementById('pauseText');
+            
+            if (isPaused) {
+                btn.classList.add('paused');
+                icon.textContent = '▶';
+                text.textContent = 'Resume';
+                addLog('info', 'Monitoring paused');
+            } else {
+                btn.classList.remove('paused');
+                icon.textContent = '⏸';
+                text.textContent = 'Pause';
+                addLog('info', 'Monitoring resumed');
+            }
+        }
+
+        // Export CSV
+        function exportCSV() {
+            let csv = 'Timestamp,CPU %,Memory %,Battery %,Temperature °C\n';
+            
+            dataHistory.forEach(entry => {
+                csv += `${entry.timestamp},${entry.cpu},${entry.memory},${entry.battery},${entry.temperature}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'resource_data_' + new Date().toISOString().slice(0, 10) + '.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            addLog('success', 'Data exported to CSV file');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            updateProcesses();
+            updateBattery();
+            updateTemperature();
+            
+            // Add initial log entries
+            addLog('success', 'System monitoring started');
+            addLog('info', 'Connected to Resource Monitor');
+            addLog('info', 'Warning thresholds: Battery 20%, Temperature 70°C, Memory 70%');
+            
+            // Update intervals
+            setInterval(updateStats, 1000);
+            setInterval(updateProcesses, 2000);
+            setInterval(updateUptime, 1000);
+            setInterval(updateBattery, 2000);
+            setInterval(updateTemperature, 1500);
+        });
+    </script>
+</body>
+</html>
+            
+            // Update intervals
+            setInterval(updateStats, 1000);
+            setInterval(updateProcesses, 2000);
+            setInterval(updateUptime, 1000);
+        };
+    </script>
+</body>
+</html>
